@@ -1,0 +1,6 @@
+pandas
+pyarrow
+fastparquet
+requests
+zipfile
+tqdm

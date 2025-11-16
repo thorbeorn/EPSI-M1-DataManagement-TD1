@@ -1,0 +1,6 @@
+data/
+.DS_STORE
+
+*.zip
+*.csv
+*.parquet
