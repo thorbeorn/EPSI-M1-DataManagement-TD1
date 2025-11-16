@@ -10,8 +10,8 @@ PATHS = {
     "zip": "flight_data_2024.zip",
     "data_folder": "data",
     "csv": "data/flight_data_2024.csv",
-    "parquet_raw": "flight_data_2024.parquet",
-    "parquet_compressed": "flight_data_2024_compressed.parquet"
+    "parquet_raw": "data/flight_data_2024.parquet",
+    "parquet_compressed": "data/flight_data_2024_compressed.parquet"
 }
 
 DTYPE_colone = {
