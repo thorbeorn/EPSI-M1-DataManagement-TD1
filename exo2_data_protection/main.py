@@ -30,8 +30,7 @@ def read_Parquet_File(path, engine='auto', columns=None):
         print("parquet file read into DataFrame successfully.")
         return dataframe
     except Exception as e:
-        print(f"Error reading CSV file: {e}")
-        return None
+        raise ValueError(f"Error reading CSV file: {e}")
 
 def generate_key(path):
     try:
