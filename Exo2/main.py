@@ -5,9 +5,13 @@ from cryptography.fernet import Fernet
 import os
 
 fake = Faker(locale="fr_FR")
-parquetpath = "clients_data.parquet"
-keypath = "secret.key"
-ville_to_dept = {
+
+PATHS = {
+    "key": "mail.key",
+    "parquet": "clients_data.parquet"
+}
+
+city_Department_Code = {
     "Paris": "75",
     "Marseille": "13",
     "Lyon": "69",
@@ -20,7 +24,7 @@ ville_to_dept = {
     "Lille": "59",
 }
 
-def readParquetFile(path, engine='auto', columns=None):
+def read_Parquet_File(path, engine='auto', columns=None):
     try:
         dataframe = pd.read_parquet(path, engine=engine, columns=columns)
         print("parquet file read into DataFrame successfully.")
@@ -29,166 +33,117 @@ def readParquetFile(path, engine='auto', columns=None):
         print(f"Error reading CSV file: {e}")
         return None
 
-def generate_key(path: str = "secret.key") -> bytes:
-    """Génère une clé Fernet et l'écrit dans le fichier `path`. Retourne la clé."""
-    key = Fernet.generate_key()
-    with open(path, "wb") as f:
-        f.write(key)
-    return key
-def load_key(path: str = "secret.key") -> bytes:
-    """Charge la clé depuis `path`. Lève FileNotFoundError si absent."""
-    with open(path, "rb") as f:
-        return f.read()
-def encryptEmailColumn(dataframe: pd.DataFrame, column: str = "email", key: bytes | None = None) -> pd.DataFrame:
-    """Chiffre chaque valeur de la colonne `column` en place en utilisant la clé Fernet fournie.
+def generate_key(path):
+    try:
+        key = Fernet.generate_key()
+        with open(path, "wb") as f:
+            f.write(key)
+        return key
+    except Exception:
+        raise ValueError(f"Unable to generate key at {path}")
+def load_key(path):
+    try:
+        with open(path, "rb") as f:
+            return f.read()
+    except Exception:
+        raise ValueError(f"Unable to load key from {path}")
 
-    - Les valeurs NaN sont laissées inchangées.
-    - La fonction retourne le DataFrame modifié (même objet).
-    """
+def encrypt_Column(dataframe, column, key: bytes | None = None):
     if dataframe is None or column not in dataframe.columns:
         raise ValueError(f"Invalid DataFrame or column '{column}' not found.")
-
     if key is None:
         raise ValueError("A cryptographic key must be provided.")
-
     f = Fernet(key)
-
     def _encrypt(val):
         if pd.isna(val):
             return val
         return f.encrypt(str(val).encode()).decode()
-
     dataframe[column] = dataframe[column].apply(_encrypt)
     return dataframe
-def decryptEmailColumn(dataframe: pd.DataFrame, column: str = "email", key: bytes | None = None) -> pd.DataFrame:
-    """Déchiffre chaque valeur de la colonne `column` en place en utilisant la clé Fernet fournie.
-    Si une valeur ne peut pas être déchiffrée, elle est laissée telle quelle.
-    """
+def decrypt_Column(dataframe, column, key: bytes | None = None):
     if dataframe is None or column not in dataframe.columns:
         raise ValueError(f"Invalid DataFrame or column '{column}' not found.")
-
     if key is None:
         raise ValueError("A cryptographic key must be provided.")
-
     f = Fernet(key)
-
     def _decrypt(val):
         if pd.isna(val):
             return val
         try:
             return f.decrypt(val.encode()).decode()
         except Exception:
-            # si la valeur n'est pas un token Fernet valide, la laisser
             return val
-
     dataframe[column] = dataframe[column].apply(_decrypt)
     return dataframe
-def maskParquetData(dataframe, information, column):
-    if dataframe is None or column not in dataframe.columns:
-        print(f"Invalid DataFrame or column '{column}' not found.")
-        return dataframe
 
-    match information.lower():
-        case "prenom":
-            dataframe[column] = [fake.first_name() for _ in range(len(dataframe))]
-        case "nom":
-            dataframe[column] = [fake.last_name() for _ in range(len(dataframe))]
-        case "telephone":
-            def mask_phone(num):
-                if isinstance(num, str) and len(num) >= 4:
-                    return num[:4] + "X" * (len(num) - 4)
-                else:
-                    return num
-            dataframe[column] = dataframe[column].apply(mask_phone)
-        case _:
-            print(f"Information type '{information}' not recognized.")
-    
+def faking_Column(dataframe, column, fake_Command):
+    if dataframe is None or column not in dataframe.columns:
+        raise ValueError(f"Invalid DataFrame or column '{column}' not found.")
+    if not callable(fake_Command):
+        raise TypeError("fake_Command must be a callable function.")
+    dataframe[column] = [fake_Command() for _ in range(len(dataframe))]
     return dataframe
-def anonymizeParquetData(dataframe, information, column):
+def masking_Phone_Column(dataframe, column):
     if dataframe is None or column not in dataframe.columns:
-        print(f"Invalid DataFrame or column '{column}' not found.")
-        return dataframe
-
-    match information.lower():
-        case "ville":
-            def map_to_dept(ville):
-                if not isinstance(ville, str):
-                    return None
-                if ville in ville_to_dept:
-                    return ville_to_dept[ville]
-                return ville_to_dept[get_close_matches(ville, ville_to_dept.keys(), n=1, cutoff=0.6)[0] if get_close_matches(ville, ville_to_dept.keys(), n=1, cutoff=0.6) else None]
-            dataframe[column] = dataframe[column].apply(map_to_dept)
-        case _:
-            print(f"Information type '{information}' not recognized.")
-    
+        raise ValueError(f"Invalid DataFrame or column '{column}' not found.")
+    def mask_phone(num):
+        if isinstance(num, str) and len(num) >= 2:
+            return num[:2] + "X" * (len(num) - 2)
+        else:
+            return num
+    dataframe[column] = dataframe[column].apply(mask_phone)   
     return dataframe
-def pseudomizeParquetData(dataframe, information, column):
+def anonymize_City_Column(dataframe, column):
     if dataframe is None or column not in dataframe.columns:
-        print(f"Invalid DataFrame or column '{column}' not found.")
-        return dataframe
-
-    match information.lower():
-        case "id":
-            def pseudomize_id_client(id_client):
-                if isinstance(id_client, int):
-                    return fake.random_number(digits=5)
-                else:
-                    return fake.random_number(digits=5)
-            dataframe[column] = dataframe[column].apply(pseudomize_id_client)
-        case _:
-            print(f"Information type '{information}' not recognized.")
-    
+        raise ValueError(f"Invalid DataFrame or column '{column}' not found.")
+    def city_To_Department_Code(city): 
+        if not isinstance(city, str):
+            return None
+        if city in city_Department_Code:
+            return city_Department_Code[city]
+        return city_Department_Code[get_close_matches(city, city_Department_Code.keys(), n=1, cutoff=0.6)[0] if get_close_matches(city, city_Department_Code.keys(), n=1, cutoff=0.6) else None]
+    dataframe[column] = dataframe[column].apply(city_To_Department_Code)
     return dataframe
 
-def getDataByRole(dataframe, role):
+def get_Dataframe_View_By_Role(dataframe, role):
     match role.lower():
         case "analyste_marketing" :
-            dftemp = dataframe[['id_client', 'montant_achat', 'ville_résidence']]
-            dftemp = pseudomizeParquetData(dftemp.copy(), "id", "id_client")
-            dftemp =  anonymizeParquetData(dftemp.copy(), "Ville", "ville_résidence")
-            return dftemp
+            dataframe_Temp = dataframe[['id_client', 'montant_achat', 'ville_résidence']]
+            dataframe_Temp = faking_Column(dataframe_Temp, "id_client", lambda: fake.random_number(digits=5))
+            dataframe_Temp = anonymize_City_Column(dataframe_Temp, "ville_résidence")
+            return dataframe_Temp
         case "support_client_n1" :
-            dftemp = dataframe[['id_client', 'nom', 'prénom', 'téléphone', 'montant_achat']] 
-            dftemp = pseudomizeParquetData(dftemp.copy(), "id", "id_client")
-            dftemp = maskParquetData(dftemp.copy(), "Prenom", "prénom")
-            dftemp = maskParquetData(dftemp.copy(), "Nom", "nom")
-            dftemp = maskParquetData(dftemp.copy(), "Telephone", "téléphone")
-            return dftemp
+            dataframe_Temp = dataframe[['id_client', 'nom', 'prénom', 'téléphone', 'montant_achat']] 
+            dataframe_Temp = faking_Column(dataframe_Temp, "id_client", lambda: fake.random_number(digits=5))
+            dataframe_Temp = faking_Column(dataframe_Temp, "prénom", lambda: fake.first_name())
+            dataframe_Temp = faking_Column(dataframe_Temp, "nom", lambda: fake.last_name())
+            dataframe_Temp = masking_Phone_Column(dataframe_Temp, "téléphone")
+            return dataframe_Temp
         case "admin_sécurité" :
             return dataframe
+def process_All_Column_To_Dataframe(dataframe):
+    if not os.path.exists(PATHS["key"]):
+        generate_key(PATHS["key"])
+    key = load_key(PATHS["key"])
+    dataframe = faking_Column(dataframe, "prénom", lambda: fake.first_name())
+    dataframe = faking_Column(dataframe, "nom", lambda: fake.last_name())
+    dataframe = masking_Phone_Column(dataframe, "téléphone")
+    dataframe = anonymize_City_Column(dataframe, "ville_résidence")
+    dataframe = encrypt_Column(dataframe, "email", key)
+    dataframe = faking_Column(dataframe, "id_client", lambda: fake.random_number(digits=5))
+    return dataframe
 
-def partie1Et2():
-    generate_key("p12_" + keypath)
-
-    df = readParquetFile(parquetpath)
-    print(df)
-
-    df = maskParquetData(df, "Prenom", "prénom")
-    df = maskParquetData(df, "Nom", "nom")
-    df = maskParquetData(df, "Telephone", "téléphone")
-    print(df)
-
-    df = anonymizeParquetData(df, "Ville", "ville_résidence")
-    print(df)
-
-    key = load_key("p12_" + keypath)
-    df = encryptEmailColumn(df, "email", key)
-    print(df)
-    df = decryptEmailColumn(df, "email", key)
-    print(df)
-
-    df = pseudomizeParquetData(df, "id", "id_client")
-    print(df)
-    return df
-def partie3():
-    df = readParquetFile(parquetpath)
-
+if __name__ == "__main__":
+    dataframe = read_Parquet_File(PATHS["parquet"])
+    dataframep1et2 = process_All_Column_To_Dataframe(dataframe)
+    key = load_key(PATHS["key"])
+    print("Dataframe with all column processed")
+    print(dataframep1et2)
+    print("Dataframe with email decrypted for check key encryption method")
+    print(decrypt_Column(dataframep1et2, "email", key))
     print("#####Analyste_Marketing#####")
-    print(getDataByRole(df, "Analyste_Marketing"))
+    print(get_Dataframe_View_By_Role(dataframe, "Analyste_Marketing"))
     print("#####Support_Client_N1#####")
-    print(getDataByRole(df, "Support_Client_N1"))
+    print(get_Dataframe_View_By_Role(dataframe, "Support_Client_N1"))
     print("#####Admin_Sécurité#####")
-    print(getDataByRole(df, "Admin_Sécurité"))
-
-partie1Et2()
-partie3()
+    print(get_Dataframe_View_By_Role(dataframe, "Admin_Sécurité"))

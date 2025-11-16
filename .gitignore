@@ -3,6 +3,6 @@ data/
 
 *.zip
 *.csv
-*.parquet
+*flight_data*.parquet
 *.pdf
 *.ipynb
